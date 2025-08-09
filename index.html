@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>To-Do List (jsonbin.io)</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <style>
+    body { font-family: Arial, sans-serif; background-color: #f0f0f0; text-align: center; padding: 20px; }
+    h1 { color: #2c3e50; }
+    .section { background: #fff; margin: 20px auto; padding: 20px; border-radius: 10px; width: 95%; max-width: 700px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
+    .section h2 { color: #2980b9; }
+    input[type="text"], input[type="time"] { padding: 10px; font-size: 16px; margin: 5px; width: 45%; border-radius: 5px; border: 1px solid #ccc; }
+    button { padding: 10px 15px; font-size: 16px; margin-top: 10px; background-color: #3498db; color: white; border: none; border-radius: 5px; cursor: pointer; }
+    table { width: 100%; margin-top: 15px; border-collapse: collapse; table-layout: fixed; }
+    th, td { padding: 12px; border-bottom: 1px solid #ccc; word-break: break-word; vertical-align: top; text-align: left; }
+    #tableWithTime th:nth-child(1), #tableWithTime td:nth-child(1) { width: 60%; }
+    #tableWithTime th:nth-child(2), #tableWithTime td:nth-child(2) { width: 25%; }
+    #tableWithTime th:nth-child(3), #tableWithTime td:nth-child(3), #tableWithoutTime th:nth-child(2), #tableWithoutTime td:nth-child(2) { width: 15%; text-align: center; }
+    #tableWithoutTime th:nth-child(1), #tableWithoutTime td:nth-child(1) { width: 85%; }
+    .done { text-decoration: line-through; color: gray; }
+    .counter { margin-top: 10px; color: #555; }
+    .delete-btn { background-color: red; color: white; border: none; padding: 5px 8px; border-radius: 5px; cursor: pointer; }
+    .top-buttons { margin-bottom: 20px; }
+    .small { font-size: 13px; color: #666; margin-top: 6px; }
+  </style>
+</head>
+<body>
+  <h1>📝 To-Do List (jsonbin.io)</h1>
+  <div id="currentDate" style="margin-bottom: 10px; font-size: 18px; color: #333;"></div>
+
+  <div class="top-buttons">
+    <button onclick="exportTasks()">📤 Export Tasks</button>
+    <input type="file" id="importFile" accept=".json" onchange="importTasks()" />
+  </div>
+
+  <div class="section">
+    <h2>Tasks With Time 🕒</h2>
+    <input type="text" id="taskWithTime" placeholder="Enter task">
+    <input type="time" id="taskTime">
+    <br>
+    <button onclick="addTask(true)">Add With Time</button>
+    <div class="counter" id="countWithTime">Total: 0</div>
+    <table id="tableWithTime">
+      <tr><th>Task</th><th>Time</th><th>Delete</th></tr>
+    </table>
+  </div>
+
+  <div class="section">
+    <h2>Tasks Without Time 📌</h2>
+    <input type="text" id="taskWithoutTime" placeholder="Enter task">
+    <br>
+    <button onclick="addTask(false)">Add Without Time</button>
+    <div class="counter" id="countWithoutTime">Total: 0</div>
+    <table id="tableWithoutTime">
+      <tr><th>Task</th><th>Delete</th></tr>
+    </table>
+  </div>
+
+  <script>
+  // ====== CONFIG: replace these with your jsonbin.io values ======
+  const BIN_ID = '6896fd3043b1c97be91a0bb1';
+  const ACCESS_KEY = '$2a$10$NB5HDwKGVcznIrMic/L6dOadTdC272tWXfs4xhQSa2Y0LY7FUDdK2';
+  const BIN_BASE = `https://api.jsonbin.io/v3/b/${BIN_ID}`;
+  // ===============================================================
+
+  // Data arrays
+  let tasksWithTime = [];
+  let tasksWithoutTime = [];
+
+  // ----- Fetch from jsonbin (latest) -----
+  async function fetchTasks() {
+    if (!BIN_ID || !ACCESS_KEY) {
+      alert('Please set BIN_ID and ACCESS_KEY in the script.');
+      return;
+    }
+    try {
+      const res = await fetch(`${BIN_BASE}/latest`, {
+        method: 'GET',
+        headers: {
+          'X-Access-Key': ACCESS_KEY,
+          'Accept': 'application/json'
+        }
+      });
+      if (!res.ok) throw new Error('Fetch failed: ' + res.status);
+      const json = await res.json();
+      const data = json.record || {};
+      tasksWithTime = Array.isArray(data.withTime) ? data.withTime : [];
+      tasksWithoutTime = Array.isArray(data.withoutTime) ? data.withoutTime : [];
+      renderTasks();
+    } catch (err) {
+      console.error(err);
+      alert('⚠️ Could not fetch tasks from jsonbin. Check BIN_ID / ACCESS_KEY / network.');
+    }
+  }
+
+  // ----- Save (PUT) to jsonbin (replace whole record) -----
+  async function saveTasks() {
+    try {
+      const payload = {
+        withTime: tasksWithTime,
+        withoutTime: tasksWithoutTime
+      };
+      const res = await fetch(BIN_BASE, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Access-Key': ACCESS_KEY
+        },
+        body: JSON.stringify(payload)
+      });
+      if (!res.ok) throw new Error('Save failed: ' + res.status);
+    } catch (err) {
+      console.error(err);
+      alert('⚠️ Could not save tasks to jsonbin. Check ACCESS_KEY permissions.');
+    }
+  }
+
+  // ----- Render -----
+  function renderTasks() {
+    const tableWith = document.getElementById("tableWithTime");
+    const tableWithout = document.getElementById("tableWithoutTime");
+
+    tableWith.innerHTML = `<tr><th>Task</th><th>Time</th><th>Delete</th></tr>`;
+    tableWithout.innerHTML = `<tr><th>Task</th><th>Delete</th></tr>`;
+
+    tasksWithTime.forEach((task, index) => {
+      const row = tableWith.insertRow();
+      const taskCell = row.insertCell(0);
+      const timeCell = row.insertCell(1);
+      const deleteCell = row.insertCell(2);
+
+      taskCell.textContent = task.text;
+      timeCell.textContent = task.time || "--";
+
+      if (task.done) {
+        taskCell.classList.add("done");
+        timeCell.classList.add("done");
+      }
+
+      row.onclick = async () => {
+        tasksWithTime[index].done = !tasksWithTime[index].done;
+        await saveTasks();
+        renderTasks();
+      };
+
+      const btn = document.createElement("button");
+      btn.textContent = "🗑";
+      btn.className = "delete-btn";
+      btn.onclick = async (e) => {
+        e.stopPropagation();
+        tasksWithTime.splice(index, 1);
+        await saveTasks();
+        renderTasks();
+      };
+      deleteCell.appendChild(btn);
+    });
+
+    tasksWithoutTime.forEach((task, index) => {
+      const row = tableWithout.insertRow();
+      const taskCell = row.insertCell(0);
+      const deleteCell = row.insertCell(1);
+
+      taskCell.textContent = task.text;
+
+      if (task.done) taskCell.classList.add("done");
+
+      row.onclick = async () => {
+        tasksWithoutTime[index].done = !tasksWithoutTime[index].done;
+        await saveTasks();
+        renderTasks();
+      };
+
+      const btn = document.createElement("button");
+      btn.textContent = "🗑";
+      btn.className = "delete-btn";
+      btn.onclick = async (e) => {
+        e.stopPropagation();
+        tasksWithoutTime.splice(index, 1);
+        await saveTasks();
+        renderTasks();
+      };
+      deleteCell.appendChild(btn);
+    });
+
+    document.getElementById("countWithTime").textContent = `Total: ${tasksWithTime.length}`;
+    document.getElementById("countWithoutTime").textContent = `Total: ${tasksWithoutTime.length}`;
+  }
+
+  // ----- Add Task -----
+  async function addTask(withTime) {
+    if (withTime) {
+      const text = document.getElementById("taskWithTime").value.trim();
+      const time = document.getElementById("taskTime").value;
+      if (text === "") return;
+      tasksWithTime.push({ text, time, done: false });
+      document.getElementById("taskWithTime").value = "";
+      document.getElementById("taskTime").value = "";
+    } else {
+      const text = document.getElementById("taskWithoutTime").value.trim();
+      if (text === "") return;
+      tasksWithoutTime.push({ text, done: false });
+      document.getElementById("taskWithoutTime").value = "";
+    }
+    await saveTasks();
+    renderTasks();
+  }
+
+  // ----- Export (download current server data) -----
+  async function exportTasks() {
+    try {
+      const res = await fetch(`${BIN_BASE}/latest`, {
+        headers: { 'X-Access-Key': ACCESS_KEY, 'Accept': 'application/json' }
+      });
+      if (!res.ok) throw new Error('Export fetch failed');
+      const json = await res.json();
+      const data = JSON.stringify(json.record || { withTime: [], withoutTime: [] }, null, 2);
+      const blob = new Blob([data], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = 'todo_tasks.json'; a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error(err);
+      alert('⚠️ Could not export from jsonbin.');
+    }
+  }
+
+  // ----- Import local JSON file and push to jsonbin -----
+  function importTasks() {
+    const fileInput = document.getElementById("importFile");
+    const file = fileInput.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = async function (e) {
+      try {
+        const data = JSON.parse(e.target.result);
+        tasksWithTime = Array.isArray(data.withTime) ? data.withTime : [];
+        tasksWithoutTime = Array.isArray(data.withoutTime) ? data.withoutTime : [];
+        await saveTasks();
+        renderTasks();
+        alert('✅ Tasks imported to jsonbin successfully!');
+      } catch (err) {
+        console.error(err);
+        alert('❌ Invalid JSON file');
+      }
+    };
+    reader.readAsText(file);
+  }
+
+  // ----- Daily auto-clear logic (uses local savedDate to detect day change) -----
+  (async function dailyCheckAndInit() {
+    const todayDate = new Date().toISOString().slice(0,10);
+    const savedDate = localStorage.getItem('savedDate');
+
+    if (savedDate && savedDate !== todayDate) {
+      const shouldExport = confirm("🗓 New day detected. Do you want to export yesterday's tasks before deleting?");
+      if (shouldExport) await exportTasks();
+      // Clear on server
+      tasksWithTime = [];
+      tasksWithoutTime = [];
+      await saveTasks();
+      alert('✅ Yesterday tasks cleared (jsonbin).');
+    }
+    localStorage.setItem('savedDate', todayDate);
+
+    // show current date
+    const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+    document.getElementById('currentDate').textContent = `📅 Today is ${new Date().toLocaleDateString('en-US', options)}`;
+
+    // initial fetch
+    await fetchTasks();
+  })();
+
+  </script>
+  <div class="small">Security note: Do not publish your Master Key. Use an Access Key limited to the bin and read+update permissions.</div>
+</body>
+</html>
