@@ -57,31 +57,20 @@
   </div>
 
   <script>
-  // ====== CONFIG: replace these with your jsonbin.io values ======
   const BIN_ID = '6896fd3043b1c97be91a0bb1';
   const ACCESS_KEY = '$2a$10$NB5HDwKGVcznIrMic/L6dOadTdC272tWXfs4xhQSa2Y0LY7FUDdK2';
   const BIN_BASE = `https://api.jsonbin.io/v3/b/${BIN_ID}`;
-  // ===============================================================
 
-  // Data arrays
   let tasksWithTime = [];
   let tasksWithoutTime = [];
 
-  // ----- Fetch from jsonbin (latest) -----
   async function fetchTasks() {
-    if (!BIN_ID || !ACCESS_KEY) {
-      alert('Please set BIN_ID and ACCESS_KEY in the script.');
-      return;
-    }
     try {
       const res = await fetch(`${BIN_BASE}/latest`, {
         method: 'GET',
-        headers: {
-          'X-Access-Key': ACCESS_KEY,
-          'Accept': 'application/json'
-        }
+        headers: { 'X-Access-Key': ACCESS_KEY, 'Accept': 'application/json' }
       });
-      if (!res.ok) throw new Error('Fetch failed: ' + res.status);
+      if (!res.ok) throw new Error('Fetch failed');
       const json = await res.json();
       const data = json.record || {};
       tasksWithTime = Array.isArray(data.withTime) ? data.withTime : [];
@@ -89,33 +78,25 @@
       renderTasks();
     } catch (err) {
       console.error(err);
-      alert('⚠️ Could not fetch tasks from jsonbin. Check BIN_ID / ACCESS_KEY / network.');
+      alert('⚠️ Could not fetch tasks from jsonbin.');
     }
   }
 
-  // ----- Save (PUT) to jsonbin (replace whole record) -----
   async function saveTasks() {
     try {
-      const payload = {
-        withTime: tasksWithTime,
-        withoutTime: tasksWithoutTime
-      };
+      const payload = { withTime: tasksWithTime, withoutTime: tasksWithoutTime };
       const res = await fetch(BIN_BASE, {
         method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Access-Key': ACCESS_KEY
-        },
+        headers: { 'Content-Type': 'application/json', 'X-Access-Key': ACCESS_KEY },
         body: JSON.stringify(payload)
       });
-      if (!res.ok) throw new Error('Save failed: ' + res.status);
+      if (!res.ok) throw new Error('Save failed');
     } catch (err) {
       console.error(err);
-      alert('⚠️ Could not save tasks to jsonbin. Check ACCESS_KEY permissions.');
+      alert('⚠️ Could not save tasks to jsonbin.');
     }
   }
 
-  // ----- Render -----
   function renderTasks() {
     const tableWith = document.getElementById("tableWithTime");
     const tableWithout = document.getElementById("tableWithoutTime");
@@ -131,11 +112,7 @@
 
       taskCell.textContent = task.text;
       timeCell.textContent = task.time || "--";
-
-      if (task.done) {
-        taskCell.classList.add("done");
-        timeCell.classList.add("done");
-      }
+      if (task.done) { taskCell.classList.add("done"); timeCell.classList.add("done"); }
 
       row.onclick = async () => {
         tasksWithTime[index].done = !tasksWithTime[index].done;
@@ -161,7 +138,6 @@
       const deleteCell = row.insertCell(1);
 
       taskCell.textContent = task.text;
-
       if (task.done) taskCell.classList.add("done");
 
       row.onclick = async () => {
@@ -186,7 +162,6 @@
     document.getElementById("countWithoutTime").textContent = `Total: ${tasksWithoutTime.length}`;
   }
 
-  // ----- Add Task -----
   async function addTask(withTime) {
     if (withTime) {
       const text = document.getElementById("taskWithTime").value.trim();
@@ -205,13 +180,12 @@
     renderTasks();
   }
 
-  // ----- Export (download current server data) -----
   async function exportTasks() {
     try {
       const res = await fetch(`${BIN_BASE}/latest`, {
         headers: { 'X-Access-Key': ACCESS_KEY, 'Accept': 'application/json' }
       });
-      if (!res.ok) throw new Error('Export fetch failed');
+      if (!res.ok) throw new Error('Export failed');
       const json = await res.json();
       const data = JSON.stringify(json.record || { withTime: [], withoutTime: [] }, null, 2);
       const blob = new Blob([data], { type: 'application/json' });
@@ -225,7 +199,6 @@
     }
   }
 
-  // ----- Import local JSON file and push to jsonbin -----
   function importTasks() {
     const fileInput = document.getElementById("importFile");
     const file = fileInput.files[0];
@@ -238,7 +211,7 @@
         tasksWithoutTime = Array.isArray(data.withoutTime) ? data.withoutTime : [];
         await saveTasks();
         renderTasks();
-        alert('✅ Tasks imported to jsonbin successfully!');
+        alert('✅ Tasks imported successfully!');
       } catch (err) {
         console.error(err);
         alert('❌ Invalid JSON file');
@@ -247,31 +220,14 @@
     reader.readAsText(file);
   }
 
-  // ----- Daily auto-clear logic (uses local savedDate to detect day change) -----
-  (async function dailyCheckAndInit() {
-    const todayDate = new Date().toISOString().slice(0,10);
-    const savedDate = localStorage.getItem('savedDate');
-
-    if (savedDate && savedDate !== todayDate) {
-      const shouldExport = confirm("🗓 New day detected. Do you want to export yesterday's tasks before deleting?");
-      if (shouldExport) await exportTasks();
-      // Clear on server
-      tasksWithTime = [];
-      tasksWithoutTime = [];
-      await saveTasks();
-      alert('✅ Yesterday tasks cleared (jsonbin).');
-    }
-    localStorage.setItem('savedDate', todayDate);
-
-    // show current date
+  // Show current date and fetch tasks (no auto-delete)
+  (async function init() {
     const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
     document.getElementById('currentDate').textContent = `📅 Today is ${new Date().toLocaleDateString('en-US', options)}`;
-
-    // initial fetch
     await fetchTasks();
   })();
-
   </script>
+
   <div class="small">Security note: Do not publish your Master Key. Use an Access Key limited to the bin and read+update permissions.</div>
 </body>
 </html>
